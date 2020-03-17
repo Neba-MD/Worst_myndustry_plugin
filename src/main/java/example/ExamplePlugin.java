@@ -1,11 +1,9 @@
 package example;
 
 import arc.Events;
-import arc.struct.Array;
 import arc.util.CommandHandler;
 import arc.util.Log;
 import arc.util.Timer;
-import mindustry.Vars;
 import mindustry.content.Blocks;
 import mindustry.entities.type.Player;
 import mindustry.game.EventType;
@@ -28,6 +26,11 @@ public class ExamplePlugin extends Plugin{
 
     UnitFactory factory=new UnitFactory(this);
     Vote vote=new Vote(this,factory);
+    Timer travelTimer=new Timer();
+    Timer travelCountdownTimer=new Timer();
+    TimerTask countdown;
+    TimerTask transport;
+    static int time;
     int[] layout=new int[100];
     int layout_capacity=1000000;
     int max_transport=5000;
@@ -36,7 +39,7 @@ public class ExamplePlugin extends Plugin{
     Item launch_item=null;
     boolean transporting=false;
     boolean launch_to_core=false;
-
+    boolean interrupted=false;
 
     public ExamplePlugin(){
         content.items();
@@ -50,7 +53,9 @@ public class ExamplePlugin extends Plugin{
                 }
             }
         });
-
+        Events.on(EventType.GameOverEvent.class,e->{
+            interrupted();
+        });
         //listen for a block selection event
         /*Events.on(BuildSelectEvent.class, event -> {
             if(!event.breaking && event.builder != null && event.builder.buildRequest() != null && event.builder.buildRequest().block == Blocks.thoriumReactor && event.builder instanceof Player){
@@ -60,18 +65,23 @@ public class ExamplePlugin extends Plugin{
         });*/
         }
 
+    private void interrupted() {
+        interrupted=true;
+        factory.interrupted();
+        vote.interrupted();
+    }
 
 
-    public boolean isInteger(String str) {
+    public boolean isNotInteger(String str) {
         if(str == null || str.trim().isEmpty()) {
-            return false;
+            return true;
         }
         for (int i = 0; i < str.length(); i++) {
             if(!Character.isDigit(str.charAt(i))) {
-                return false;
+                return true;
             }
         }
-        return true;
+        return false;
     }
     public boolean verify_item(Item item){
         return item.name.equals("blast-compound") ||
@@ -153,7 +163,7 @@ public class ExamplePlugin extends Plugin{
 
     }*/
     public boolean set_transport_inf(String sItem,String sAmount,Player player,boolean can_all){
-        if(!isInteger(sAmount)){
+        if(isNotInteger(sAmount)){
             player.sendMessage("[scarlet]You entered wrong amount!");
             return false;
         }
@@ -201,12 +211,18 @@ public class ExamplePlugin extends Plugin{
             idx++;
         }
         int amount=get_transport_amount(launch_item,launch_amount,core,launch_to_core);
-        String message=(launch_item==null ? "all" :Integer.toString(amount)+" "+launch_item.name);
+        String message=(launch_item==null ? "all" : amount +" "+launch_item.name);
         if(launch_to_core){
             layout[idx]-=amount;
             transporting=true;
+            int finalIdx = idx;
             Timer.schedule(()->{
                 transporting=false;
+                if(interrupted){
+                    Call.sendMessage("Base is gone ,[orange]"+message+"[white] going back to loadout.");
+                    layout[finalIdx]+=amount;
+                    return;
+                }
                 core.items.add(launch_item,amount);
                 Call.sendMessage(message+" arrived to core");
             },transport_time);
@@ -224,15 +240,8 @@ public class ExamplePlugin extends Plugin{
                 }
             }else {
                 core.items.remove(launch_item, amount);
+                layout[idx] += amount;
             }
-            int finalIdx = idx;
-            Timer.schedule(()->{
-                transporting = false;
-                Call.sendMessage(message + " arrived to loadout");
-                if(launch_item!=null) {
-                    layout[finalIdx] += amount;
-                }
-            },transport_time);
         }
 
     }
@@ -309,7 +318,7 @@ public class ExamplePlugin extends Plugin{
             if(verify_item(item)){continue;}
             if (!core.items.has(item, cost)) {
                 can_build=false;
-                player.sendMessage("[scarlet]" + item.name + ":" + Integer.toString(core.items.get(item))+"/"+Integer.toString(cost));
+                player.sendMessage("[scarlet]" + item.name + ":" + core.items.get(item) +"/"+ cost);
             }
         }
         if(can_build) {
@@ -350,7 +359,7 @@ public class ExamplePlugin extends Plugin{
                 });
         handler.register("set-transport_time","<seconds>","Sets the ladout-usees cooldown.",args->
         {
-            if(!isInteger(args[0])){
+            if(isNotInteger(args[0])){
                 Log.info("You have to write an integer Neba!");
                 return;
             }
@@ -360,7 +369,7 @@ public class ExamplePlugin extends Plugin{
         });
         handler.register("set-max_transport","<seconds>","Sets the laudout-usees maximal transport .",args->
         {
-            if(!isInteger(args[0])){
+            if(isNotInteger(args[0])){
                 Log.info("You have to write an integer Neba!");
                 return;
             }
@@ -433,6 +442,10 @@ public class ExamplePlugin extends Plugin{
                 return;
             }
             vote.build_Vote(player,arg[0]);
+        });
+        handler.<Player>register("factory-progress","Displays traveling and building progress of units."
+                , (arg, player) -> {
+            factory.info(player);
         });
     }
 }

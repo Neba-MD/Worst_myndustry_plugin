@@ -22,6 +22,7 @@ public class Vote {
     int bundletime = 0;
 
     boolean isvoting = false;
+    boolean interrupted=false;
 
     ArrayList<String> list = new ArrayList<>();
     int require;
@@ -56,6 +57,9 @@ public class Vote {
             String[] bundlename = {"vote-50sec", "vote-40sec", "vote-30sec", "vote-20sec", "vote-10sec"};
 
             if (bundletime <= 4) {
+                if(interrupted){
+                    return;
+                }
                 if (playerGroup != null && playerGroup.size() > 0) {
                     Call.sendMessage(bundlename[bundletime]);
                 }
@@ -84,6 +88,12 @@ public class Vote {
         bundletimer.purge();
         bundletimer = new java.util.Timer();
         bundletime = 0;
+        if(interrupted){
+            interrupted=false;
+            list.clear();
+            return;
+
+        }
         switch (type) {
             case "use":
                 if (require <= 0) {
@@ -115,16 +125,19 @@ public class Vote {
     }
 
     public void command() {
-        if(playerGroup.size()==1){
-            require=1;
-        }else if (playerGroup.size() <= 3) {
-
-            require = 2;
-        } else {
-            require = (int) Math.ceil((double) playerGroup.size() / 2);
+        if(interrupted){
+            cancel();
         }
-
         if (!isvoting) {
+            if(playerGroup.size()==1){
+                require=1;
+            }else if (playerGroup.size() <= 3) {
+
+                require = 2;
+            } else {
+                require = (int) Math.ceil((double) playerGroup.size() / 2);
+            }
+
             String message = Integer.toString(plugin.launch_amount) + " " + (plugin.launch_item == null ? " of every resource" : plugin.launch_item.name);
             switch (type) {
                 case "use":
@@ -149,6 +162,10 @@ public class Vote {
     }
 
     public void add_vote(Player player, int vote) {
+        if(interrupted){
+            player.sendMessage("Voting wos interrupted by game over,let it pass or open new vote.");
+            return;
+        }
         if (list.contains(player.uuid)) {
             player.sendMessage("You already voted,sit down!");
             return;
@@ -160,5 +177,8 @@ public class Vote {
         } else {
             Call.sendMessage("[orange]" + Integer.toString(require) + " [white]more votes needet.");
         }
+    }
+    public void interrupted() {
+       interrupted = true;
     }
 }
